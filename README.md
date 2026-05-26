@@ -54,6 +54,8 @@ Setup after install:
 | Service | Purpose | Port | How it runs |
 |---------|---------|------|-------------|
 | Glances | Hardware monitoring (CPU, RAM, disk, temps) | 61208 | Docker |
+| Ollama | Local AI model backend | 11434 | Docker |
+| Open WebUI | Browser interface for Ollama | 8080 | Docker |
 
 More to come (see Future Plans).
 
@@ -73,7 +75,8 @@ Alternatively, I can ssh in via the terminal and run `btop` or `htop`.
                   LAN            +-- Docker
                                       |
                                       +-- Glances (port 61208)
-                                      +-- (more services to come)
+                                      +-- Ollama (port 11434)
+                                      +-- Open WebUI (port 8080)
 ```
 
 I do all the work from the Mac. Code and admin happen over SSH; services are viewed in the browser over the local network.
@@ -103,6 +106,12 @@ The cause was that the web-server option was being passed as an environment vari
 Once Glances was confirmed serving on the server, the browser on the Mac still could not connect. I worked through it one layer at a time: the container was running, the port was open in the firewall, `curl` to localhost on the server worked (so the service was fine), and `ping` from the Mac reached the server (so the network was fine). That narrowed it to something on the Mac.
 
 It turned out recent macOS versions require apps to be granted local-network permission, and Firefox had it switched off. Turning it on fixed it. The useful part was the method: check each step from the service outwards until only one possible cause is left.
+
+### Local AI is not tenable
+
+I successfully installed Ollama and Open WebUI, and they communicate fine, but generating text is incredibly slow.
+
+The cause is hardware limitations. Running LLMs requires significant GPU power and VRAM. This server relies entirely on an older, low-wattage laptop CPU and integrated Intel graphics, so inference falls back entirely to the CPU. Since a dedicated GPU cannot be added to this laptop motherboard, there is no real fix. It succeeded as a deployment experiment, but fails as a practical daily tool.
 
 ## What I Learned
 
@@ -143,3 +152,34 @@ sudo ufw allow 61208/tcp
 ```
 
 View at `http://<server-ip>:61208`.
+
+### Ollama
+
+```
+docker run -d \
+  --restart=unless-stopped \
+  -v ollama:/root/.ollama \
+  -p 11434:11434 \
+  --name ollama \
+  ollama/ollama
+```
+
+### Open WebUI
+
+```
+docker run -d \
+  --restart=unless-stopped \
+  -p 8080:8080 \
+  --add-host=host.docker.internal:host-gateway \
+  -v open-webui:/app/backend/data \
+  --name open-webui \
+  ghcr.io/open-webui/open-webui:main
+```
+
+Open firewall port:
+
+```
+sudo ufw allow 8080/tcp
+```
+
+View at `http://<server-ip>:8080`.
